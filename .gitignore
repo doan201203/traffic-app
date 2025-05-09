@@ -2,6 +2,11 @@
 node_modules
 __pycache__
 
+# Cache
+.cache
+node_modules/.cache
+frontend/node_modules/.cache
+
 /.pnp
 .pnp.js
 
