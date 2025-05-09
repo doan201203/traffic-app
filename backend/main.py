@@ -64,6 +64,7 @@ async def detect_signs(file: UploadFile = File(...)):
     """
     try:
         # Read and decode image
+        print(file)
         contents = await file.read()
         nparr = np.frombuffer(contents, np.uint8)
         frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
