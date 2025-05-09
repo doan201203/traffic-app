@@ -1,5 +1,7 @@
 # Dependencies
-/node_modules
+node_modules
+__pycache__
+
 /.pnp
 .pnp.js
 
@@ -30,7 +32,6 @@ yarn-error.log*
 .DS_Store
 
 # Python
-__pycache__/
 *.py[cod]
 *$py.class
 *.so
