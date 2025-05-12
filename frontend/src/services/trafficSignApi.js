@@ -4,7 +4,7 @@ export async function sendTrafficFrame(imageSrc) {
   const formData = new FormData();
   formData.append("file", blob, "frame.jpg");
 
-  const res = await fetch("http://localhost:8000/detect", {
+  const res = await fetch("ws://localhost:8000/ws/detect", {
     method: "POST",
     body: formData,
   });

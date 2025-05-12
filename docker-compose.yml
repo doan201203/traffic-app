@@ -1,6 +1,22 @@
 version: '3.8'
 
 services:
+  frontend:
+    build: 
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - REACT_APP_API_URL=http://backend:8000
+    depends_on:
+      - backend
+    networks:
+      - traffic-network
+
   backend:
     build: 
       context: ./backend
@@ -9,24 +25,11 @@ services:
       - "8000:8000"
     volumes:
       - ./backend:/app
-      - ./backend/models:/app/models
     environment:
-      - PYTHONUNBUFFERED=1
-    restart: unless-stopped
-
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    ports:
-      - "80:80"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    depends_on:
-      - backend
-    restart: unless-stopped
+      - CORS_ORIGINS=http://frontend:3000
+    networks:
+      - traffic-network
 
 networks:
-  default:
+  traffic-network:
     driver: bridge 

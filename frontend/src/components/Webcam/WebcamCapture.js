@@ -3,10 +3,11 @@ import Webcam from "react-webcam";
 import useInterval from "../../hooks/useInterval";
 import { Button, WebcamBox } from "./webcamCapture.styles";
 import { sendTrafficFrame } from "../../services/trafficSignApi";
+import { trafficSignWs } from "../../services/trafficSignWs";
 
 export default function WebcamCapture({ webcamOn, setWebcamOn, sending, setSending, setNotification }) {
   const webcamRef = useRef();
-  const [facingMode, setFacingMode] = useState("user"); // "user" = camera trước, "environment" = camera sau
+  const [facingMode, setFacingMode] = useState("environment"); // "user" = camera trước, "environment" = camera sau
 
   // Hàm gửi frame
   const sendFrame = useCallback(async () => {
@@ -18,7 +19,7 @@ export default function WebcamCapture({ webcamOn, setWebcamOn, sending, setSendi
       return;
     }
     try {
-      const data = await sendTrafficFrame(imageSrc);
+      const data = await trafficSignWs(imageSrc);
       if (data && data.warnings) setNotification(`Cảnh báo: ${data.warnings}`);
       else setNotification("");
     } catch {
@@ -30,7 +31,7 @@ export default function WebcamCapture({ webcamOn, setWebcamOn, sending, setSendi
   // Gửi frame mỗi 5s khi webcam bật
   useInterval(() => {
     if (webcamOn) sendFrame();
-  }, webcamOn ? 5000 : null);
+  }, webcamOn ? 500 : null);
 
   // Hàm chuyển camera trước/sau
   const handleSwitchCamera = () => {
@@ -44,8 +45,8 @@ export default function WebcamCapture({ webcamOn, setWebcamOn, sending, setSendi
           ref={webcamRef}
           audio={false}
           screenshotFormat="image/jpeg"
-          width={320}
-          height={240}
+          width={640}
+          height={640}
           videoConstraints={{
             facingMode: facingMode,
           }}
