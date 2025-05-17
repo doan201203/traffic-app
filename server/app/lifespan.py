@@ -3,19 +3,19 @@ from contextlib import asynccontextmanager
 import logging
 from core_models.yolo_detector import YOLODetector
 from app.core.config import settings
+import os 
 
 logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app):
   logger.info('Starting lifespan')
-  
+  print(os.getcwd())
   try:
     detector = YOLODetector(
-      model_path="/home/trdoan/traffic-app/server/models_onnx/best.onnx",
+      model_path=settings.MODEL_PATH,
       device=settings.DEVICE      
     )
-    print("HELLO", settings.MODEL_PATH)
     app.state.detector = detector
     logger.info(f'Tải mô hình thành công: {settings.MODEL_PATH}')
   except Exception as e:

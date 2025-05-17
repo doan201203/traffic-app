@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 
 export default function useInterval(callback, delay) {
+  console.log("HERE IS USEINTERVAL", delay);
   const savedCallback = useRef();
 
   useEffect(() => {

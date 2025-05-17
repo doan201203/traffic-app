@@ -1,6 +1,17 @@
 import time
 import logging
-from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Request, Query, WebSocket, WebSocketDisconnect
+from fastapi import (
+  APIRouter,
+  File,
+  UploadFile,
+  HTTPException,
+  Depends,
+  Request,
+  Query,
+  WebSocket,
+  WebSocketDisconnect
+)
+
 from PIL import UnidentifiedImageError
 import json
 import base64
@@ -13,11 +24,12 @@ from core_models.yolo_detector import YOLODetector
 from starlette.websockets import WebSocketState
 from concurrent.futures import ProcessPoolExecutor
 
+from websockets.exceptions import ConnectionClosed, ConnectionClosedOK, ConnectionClosedError
+
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 def get_detector(request: Request) -> YOLODetector:
-    print("GET DETECTOR", request.app.state)
     if not hasattr(request.app.state, 'detector') or \
        request.app.state.detector is None or \
        not isinstance(request.app.state.detector, YOLODetector):
@@ -109,10 +121,21 @@ async def detect_traffic_warning(
 @router.websocket("/ws/detect")
 async def websocket_detect_traffic_warning(
     websocket: WebSocket,
-    detector: YOLODetector = Depends(get_detector),
 ):
     await websocket.accept()
+    client_id = f"{websocket.client.host}:{websocket.client.port}"
+    print(f"WebSocket connection established for client: {client_id}")
     
+    # load detector
+    try:
+      detector: YOLODetector = websocket.app.state.detector
+      if detector is None or not isinstance(detector, YOLODetector):
+        raise AttributeError("Detector không tìm thấy hoặc không hợp lệ trong app state")
+    except AttributeError as e:
+        logger.error(f"WebSocket: Không tìm thấy Detector trong app.state. Đóng kết nối. Lỗi: {e}")
+        await websocket.close(code=1011, reason="Dịch vụ model không khả dụng") 
+        return
+      
     try:
         while True:
             # Receive the image data from the client
@@ -146,6 +169,7 @@ async def websocket_detect_traffic_warning(
                     confidence_threshold=confidence_threshold
                 )
                 
+                print("ALL RAW DETECTIONS", all_raw_detections)
                 relevant_warnings: list[DetectionResult] = []
                 all_parsed_detections: list[DetectionResult] = []
                 
@@ -176,8 +200,15 @@ async def websocket_detect_traffic_warning(
                     processing_time_ms=processing_time * 1000,
                 )
                 
-                await websocket.send_json(response.dict())
-                
+                try:
+                    await websocket.send_json(response.model_dump()) 
+                except (ConnectionClosed, ConnectionClosedOK, ConnectionClosedError) as e:
+                    logger.warning(f"WebSocket {client_id}: Client disconnected before message could be sent. Error: {e}")
+                    break 
+                except RuntimeError as e: # Thường là "Cannot call send after close"
+                    logger.warning(f"WebSocket {client_id}: Cannot send message, connection might be closing or closed. Error: {e}")
+                    break 
+                  
             except json.JSONDecodeError:
                 await websocket.send_json({
                     "error": "Invalid JSON data"

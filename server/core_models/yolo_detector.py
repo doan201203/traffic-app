@@ -1,9 +1,10 @@
 import torch
 from ultralytics import YOLO # Sử dụng thư viện ultralytics
-from PIL import Image
+from PIL import Image, ImageOps
 import io
 import logging
 import numpy as np # ultralytics results có thể trả về numpy arrays
+import base64
 logger = logging.getLogger(__name__)
 
 class YOLODetector:
@@ -23,7 +24,7 @@ class YOLODetector:
 
   def _load_model(self):
     try:
-      self.model = YOLO(self.model_path) 
+      self.model = YOLO(str(self.model_path)) 
       logger.info(f"Model {self.model_path} loaded successfully on device '{self.device}'.")
     except Exception as e:
       logger.error(f"Failed to load PyTorch YOLO model from {self.model_path} on device '{self.device}': {e}")
@@ -42,6 +43,7 @@ class YOLODetector:
         conf=confidence_threshold,
         device=self.device,
         imgsz=640,
+        tracker="bytetrack.yaml"
       )
     except Exception as e:
       logger.error(f"Detector: PyTorch YOLO model inference error: {e}", exc_info=True)
@@ -50,24 +52,28 @@ class YOLODetector:
     processed_detections = []
     if results and results[0]: 
       res = results[0] 
-      
       boxes_xyxy = res.boxes.xyxy.cpu().tolist()  # [[x1, y1, x2, y2], ...]
       confs = res.boxes.conf.cpu().tolist()    # [conf1, conf2, ...]
       class_ids = res.boxes.cls.cpu().tolist() # [cls1, cls2, ...]
-
 
       for i in range(len(boxes_xyxy)):
         box = boxes_xyxy[i]
         confidence = confs[i]
         class_id = int(class_ids[i])
-
         class_name = self.class_names[class_id] if 0 <= class_id < len(self.class_names) else f"Unknown_{class_id}"
-          
+        # Crop bbox from image
+        x1, y1, x2, y2 = map(int, box)
+        cropped = image_pil.crop((x1, y1, x2, y2))
+        # Resize to 64x64 for efficiency
+        cropped = ImageOps.fit(cropped, (64, 64), method=Image.LANCZOS)
+        buffered = io.BytesIO()
+        cropped.save(buffered, format="JPEG")
+        img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
         processed_detections.append({
           "box": [float(b) for b in box], 
           "confidence": float(confidence),
           "class_id": class_id,
-          "class_name": class_name
+          "class_name": class_name,
+          "image": img_str
         })
-    
     return processed_detections

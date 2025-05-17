@@ -1,6 +1,6 @@
 export function trafficSignWs(imageSrc) {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket("ws://localhost:8000/api/v1/ws/detect");
+    const ws = new WebSocket("ws://backend:8000/api/v1/ws/detect");
 
     ws.onopen = () => {
       const base64 = imageSrc.split(",")[1];
