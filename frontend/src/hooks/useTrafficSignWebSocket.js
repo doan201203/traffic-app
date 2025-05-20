@@ -1,8 +1,20 @@
 import {useState, useEffect, useRef, useCallback} from 'react'
 
-// const WS_URL = "ws://localhost:8000/api/v1/ws/detect"
-
-const WS_URL = window.location.hostname === 'localhost' ? `ws://localhost:8000/api/v1/ws/detect` : `wss://${window.location.host}/api/v1/ws/detect` 
+// Use a function to get WebSocket URL to avoid const reassignment issues
+const getWebsocketUrl = () => {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  // Get host from environment variables or fallback to window.location.host
+  let wsHost = process.env.REACT_APP_WS_HOST || window.location.hostname;
+  
+  // Special handling for localhost to ensure correct port
+  if (wsHost === 'localhost') {
+    // Use port 8000 for API server
+    return `ws://localhost:8000/api/v1/ws/detect`;
+  } else {
+    // For production or other environments
+    return `${protocol}//${window.location.host}/api/v1/ws/detect`;
+  }
+};
 
 export const ConnectionStatus = {
   CONNECTING: 'CONNECTING',
@@ -12,149 +24,213 @@ export const ConnectionStatus = {
   ERROR: 'ERROR'
 };
 
-export function useTrafficSignWebSocket(enabled = true) {
-  const [lastMess, setLastMess] = useState(null)
-  const [connectionStatus, setConnectionStatus] = useState(ConnectionStatus.CLOSED)
-  const websocket = useRef(null)
-  const messQueue = useRef([])
-  const connectRetryTimeout = useRef(null)
-
+export function useTrafficSignWebSocket(enabled = false) {
+  const [lastMess, setLastMess] = useState(null);
+  const [connectionStatus, setConnectionStatus] = useState(ConnectionStatus.CLOSED);
+  const websocket = useRef(null);
+  
+  // References for managing connection state
+  const connectRetryTimeout = useRef(null);
+  const retryCount = useRef(0);
+  const maxRetryCount = 10;
+  const heartbeatInterval = useRef(null);
+  
+  // Break circular dependency between functions
+  const cleanupRef = useRef(null);
+  
+  // Calculate backoff time
+  const getBackoffTime = useCallback(() => {
+    const baseTime = Math.min(30000, 1000 * Math.pow(1.5, retryCount.current));
+    const jitter = Math.random() * 1000;
+    return Math.floor(baseTime + jitter);
+  }, []);
+  
+  // Setup heartbeat function
+  const setupHeartbeat = useCallback(() => {
+    if (heartbeatInterval.current) {
+      clearInterval(heartbeatInterval.current);
+      heartbeatInterval.current = null;
+    }
+    
+    heartbeatInterval.current = setInterval(() => {
+      if (websocket.current && websocket.current.readyState === WebSocket.OPEN) {
+        try {
+          websocket.current.send(JSON.stringify({ type: "ping" }));
+        } catch (err) {
+          console.error("Error sending heartbeat:", err);
+          if (cleanupRef.current) cleanupRef.current();
+        }
+      }
+    }, 30000);
+  }, []);
+  
+  // Cleanup function
+  const cleanupWebSocket = useCallback(() => {
+    if (connectRetryTimeout.current) {
+      clearTimeout(connectRetryTimeout.current);
+      connectRetryTimeout.current = null;
+    }
+    
+    if (heartbeatInterval.current) {
+      clearInterval(heartbeatInterval.current);
+      heartbeatInterval.current = null;
+    }
+    
+    if (websocket.current) {
+      websocket.current.onopen = null;
+      websocket.current.onmessage = null;
+      websocket.current.onerror = null;
+      websocket.current.onclose = null;
+      
+      try {
+        if (
+          websocket.current.readyState === WebSocket.OPEN ||
+          websocket.current.readyState === WebSocket.CONNECTING
+        ) {
+          websocket.current.close(1000, "Cleanup");
+        }
+      } catch (err) {
+        console.error("Error closing WebSocket:", err);
+      }
+      
+      websocket.current = null;
+    }
+    
+    setConnectionStatus(ConnectionStatus.CLOSED);
+  }, []);
+  
+  // Store cleanup function in ref to break circular dependency
+  cleanupRef.current = cleanupWebSocket;
+  
+  // Send message function
   const sendMess = useCallback((messagePayload) => {
     if (typeof messagePayload !== 'object' || messagePayload === null) {
       console.error('sendMess: payload must be an object');
-      return 
-    }
-
-    const messageString = JSON.stringify(messagePayload)
-
-    if (websocket.current && websocket.current.readyState == WebSocket.OPEN) {
-      websocket.current.send(messageString)
-    }
-  }, [])
-
-  const connectWebSocket = useCallback(() => {
-
-    if (!enabled) {
-      console.log("connectWebSocket: WebSocket is disabled.");
-      disconnectWebSocket();
       return;
     }
-
-    if (
-      websocket.current && (
-        websocket.current.readyState === WebSocket.CONNECTING ||
-        websocket.current.readyState === WebSocket.OPEN
-      )) {
-      console.log("connectWebSocket: Already connecting or open.");
-      return;
-    }
-
-    if (connectRetryTimeout.current) {
-      clearTimeout(connectRetryTimeout.current)
-      connectRetryTimeout.current = null
-    }
-
-    console.log("Attempting to connect WS");
-    setConnectionStatus(ConnectionStatus.CONNECTING)
-
-    if (websocket.current &&  websocket.current.readyState !== WebSocket.CLOSED) {
-      console.log("WS CLOSING");
-      websocket.current.close()
-    }
-
-    const ws = new WebSocket(WS_URL) 
-    websocket.current = ws 
-    console.log(ws);
-    ws.onopen = () => {
-      console.log("WS CONNECTED");
-      setConnectionStatus(ConnectionStatus.OPEN)
-    }
-
-    ws.onmessage = (event) => {
-      try {
-        const dat = JSON.parse(event.data)
-        messQueue.current.push(dat)
-        setLastMess(dat)
-      } catch (err) {
-        console.error("Failed to parse");
-        setLastMess({error: "Failed to parse mess"})
-      }
-    }
-
-    ws.onerror = (err) => {
-      console.error("WS ERROR");
-      setConnectionStatus(ConnectionStatus.ERROR)
-      console.error(err);
-      if (enabled) {
-        console.log("RETRY in 5s");
-        connectRetryTimeout.current = setTimeout(connectWebSocket, 5000)
-      }
-    }
-
-    ws.onclose = (event) => {
-      console.log("WS CLOSED", event.reason, event.code);
-
-      if (!connectRetryTimeout.current) {
-        setConnectionStatus(ConnectionStatus.CLOSED)
-      }
-
-      websocket.current = null
-      if (enabled && !event.wasClean) { 
-        console.log("Connection closed unexpectedly. Scheduling retry...");
-        if (!connectRetryTimeout.current) { 
-          connectRetryTimeout.current = setTimeout(connectWebSocket, 5000);
-        }
-      }
-    }
-
-  }, [enabled])
-
-  const disconnectWebSocket = useCallback(() => {
-    console.log("disconnectWebSocket called.");
-    // Clear retry timeout nếu đang chờ
-    if (connectRetryTimeout.current) {
-        clearTimeout(connectRetryTimeout.current);
-        connectRetryTimeout.current = null;
-    }
-
-    if (websocket.current) {
-       if (websocket.current.readyState === WebSocket.OPEN || websocket.current.readyState === WebSocket.CONNECTING) {
-        console.log("Closing WebSocket...");
-        websocket.current.close(1000, "User disconnected");
-        setConnectionStatus(ConnectionStatus.CLOSING);
-       } else {
-        if (websocket.current.readyState === WebSocket.CLOSED) {
-          setConnectionStatus(ConnectionStatus.CLOSED);
-          websocket.current = null; 
-        }
-       }
-    } else {
-      setConnectionStatus(ConnectionStatus.CLOSED);
-    }
-  }, [setConnectionStatus]);
-
-  useEffect(() => {
-    if (enabled) {
-      connectWebSocket(); // Kết nối khi được bật
-    } else {
-      disconnectWebSocket(); // Ngắt kết nối khi bị tắt
-    }
-
-    // Cleanup: Đảm bảo ngắt kết nối khi hook unmount hoặc `enabled` thành false
-    return () => {
-      console.log("Cleanup: Disconnecting WebSocket...");
-      // Không gọi disconnectWebSocket trực tiếp ở đây để tránh xung đột state
-       // Clear retry timeout nếu có
-        if (connectRetryTimeout.current) {
-            clearTimeout(connectRetryTimeout.current);
-        }
-       // Đóng kết nối nếu đang mở
+    
+    try {
       if (websocket.current && websocket.current.readyState === WebSocket.OPEN) {
-        websocket.current.close(1000, "Hook cleanup");
+        websocket.current.send(JSON.stringify(messagePayload));
+        
+        if (retryCount.current > 0) {
+          retryCount.current = Math.max(0, retryCount.current - 1);
+        }
+      } else if (connectionStatus !== ConnectionStatus.CONNECTING) {
+        console.warn('Cannot send message: WebSocket not connected');
       }
-      websocket.current = null; // Reset ref
-    };
-  }, [enabled, connectWebSocket, disconnectWebSocket]); 
+    } catch (error) {
+      console.error('Error sending WebSocket message:', error);
+      
+      if (connectionStatus === ConnectionStatus.OPEN) {
+        setConnectionStatus(ConnectionStatus.ERROR);
+        cleanupWebSocket();
+      }
+    }
+  }, [connectionStatus, cleanupWebSocket]);
 
-  return { sendMess, lastMess, connectionStatus }
+  // Connection management
+  useEffect(() => {
+    // Don't attempt connection if not enabled
+    if (!enabled) {
+      cleanupWebSocket();
+      return;
+    }
+    
+    function connect() {
+      try {
+        // Clean up existing connection first
+        if (websocket.current) {
+          cleanupWebSocket();
+        }
+        
+        // Create new connection with dynamic URL
+        const wsUrl = getWebsocketUrl();
+        const ws = new WebSocket(wsUrl);
+        
+        websocket.current = ws;
+        setConnectionStatus(ConnectionStatus.CONNECTING);
+        
+        ws.onopen = () => {
+          setConnectionStatus(ConnectionStatus.OPEN);
+          retryCount.current = 0;
+          setupHeartbeat();
+        };
+        
+        ws.onmessage = (event) => {
+          try {
+            if (event.data === 'pong') return;
+            
+            const data = JSON.parse(event.data);
+            setLastMess(data);
+          } catch (error) {
+            console.error("Error parsing WebSocket message:", error);
+            setLastMess({ error: "Không thể xử lý phản hồi từ máy chủ" });
+          }
+        };
+        
+        ws.onerror = (error) => {
+          console.error("WebSocket error:", error);
+          setConnectionStatus(ConnectionStatus.ERROR);
+          cleanupWebSocket();
+          
+          if (enabled && retryCount.current < maxRetryCount) {
+            const backoffTime = getBackoffTime();
+            console.log(`Attempting reconnection in ${backoffTime}ms (attempt ${retryCount.current + 1})`);
+            
+            connectRetryTimeout.current = setTimeout(() => {
+              retryCount.current += 1;
+              connect();
+            }, backoffTime);
+          } else if (retryCount.current >= maxRetryCount) {
+            setLastMess({ error: "Không thể kết nối đến máy chủ sau nhiều lần thử" });
+          }
+        };
+        
+        ws.onclose = (event) => {
+          if (connectionStatus === ConnectionStatus.CLOSING) {
+            setConnectionStatus(ConnectionStatus.CLOSED);
+            websocket.current = null;
+          } else if (enabled) {
+            console.warn(`WebSocket closed unexpectedly: ${event.code} - ${event.reason}`);
+            cleanupWebSocket();
+            
+            if (retryCount.current < maxRetryCount) {
+              const backoffTime = getBackoffTime();
+              console.log(`Attempting reconnection in ${backoffTime}ms (attempt ${retryCount.current + 1})`);
+              
+              connectRetryTimeout.current = setTimeout(() => {
+                retryCount.current += 1;
+                connect();
+              }, backoffTime);
+            } else {
+              setLastMess({ error: "Mất kết nối đến máy chủ" });
+            }
+          }
+        };
+      } catch (error) {
+        console.error("Error creating WebSocket:", error);
+        setConnectionStatus(ConnectionStatus.ERROR);
+        
+        if (enabled && retryCount.current < maxRetryCount) {
+          const backoffTime = getBackoffTime();
+          connectRetryTimeout.current = setTimeout(() => {
+            retryCount.current += 1;
+            connect();
+          }, backoffTime);
+        }
+      }
+    }
+    
+    // Start the connection process
+    connect();
+    
+    // Cleanup on unmount or when enabled changes
+    return () => {
+      setConnectionStatus(ConnectionStatus.CLOSING);
+      cleanupWebSocket();
+    };
+  }, [enabled, cleanupWebSocket, setupHeartbeat, getBackoffTime]);
+
+  return { sendMess, lastMess, connectionStatus };
 }

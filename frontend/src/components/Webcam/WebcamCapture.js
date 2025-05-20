@@ -1,123 +1,190 @@
-import React, { useRef, useCallback, useState, useEffect } from "react";
+import React, { useRef, useCallback, useState, useEffect, memo } from "react";
 import Webcam from "react-webcam";
 import useInterval from "../../hooks/useInterval";
 import { Button, WebcamBox } from "./webcamCapture.styles";
-import { sendTrafficFrame } from "../../services/trafficSignApi";
-import { trafficSignWs } from "../../services/trafficSignWs";
-import {useTrafficSignWebSocket, ConnectionStatus} from '../../hooks/useTrafficSignWebSocket'
+import { useTrafficSignWebSocket, ConnectionStatus } from '../../hooks/useTrafficSignWebSocket';
 
-export default function WebcamCapture({ webcamOn, setWebcamOn, sending, setSending, setNotification, setWarning }) {
+const WebcamCapture = ({ 
+  webcamOn, 
+  setWebcamOn, 
+  sending, 
+  setSending, 
+  setNotification, 
+  setWarnings,
+  facingMode,
+  setFacingMode
+}) => {
   const webcamRef = useRef(null);
-  const [facingMode, setFacingMode] = useState("environment"); // "user" = camera trước, "environment" = camera sau
-  const {sendMess, lastMess, connectionStatus} = useTrafficSignWebSocket(webcamOn);
+  const { sendMess, lastMess, connectionStatus } = useTrafficSignWebSocket(webcamOn);
+  const [cameraError, setCameraError] = useState(null);
+  const [videoConstraints, setVideoConstraints] = useState({
+    facingMode: facingMode,
+    width: { ideal: 640 },
+    height: { ideal: 640 },
+  });
+  
+  // Update video constraints when facingMode changes
+  useEffect(() => {
+    setVideoConstraints(current => ({
+      ...current,
+      facingMode
+    }));
+  }, [facingMode]);
+  
+  // Monitor and report connection status
+  useEffect(() => {
+    if (webcamOn) {
+      setNotification(getStatusText(connectionStatus));
+    }
+  }, [webcamOn, connectionStatus, setNotification]);
+
+  // Process results from backend
+  useEffect(() => {
+    if (!lastMess) return;
+    
+    if (lastMess.error) {
+      setNotification(`Lỗi: ${lastMess.error}`);
+      setWarnings([]);
+    } else if (lastMess.warnings && lastMess.warnings.length > 0) {
+      // Sort warnings by confidence for more consistent UI
+      const sortedWarnings = [...lastMess.warnings].sort((a, b) => b.confidence - a.confidence);
+      setWarnings(sortedWarnings);
+    } else {
+      setNotification(`Không phát hiện cảnh báo giao thông.`);
+      setWarnings([]);
+    }
+    setSending(false);
+  }, [lastMess, setNotification, setSending, setWarnings]);
+
+  // Throttled frame sending with dynamic interval based on device performance
+  // More powerful devices will use 700ms, slower ones 1000ms
+  const [frameInterval, setFrameInterval] = useState(1000);
   
   useEffect(() => {
-    console.log(`Webcam: ${webcamOn}, WS Status: ${connectionStatus}, Sending: ${sending}`);
-  }, [webcamOn, connectionStatus, sending]);
+    // Measure device performance to set appropriate frame rate
+    if (webcamOn) {
+      const start = performance.now();
+      let counter = 0;
+      
+      const timer = setTimeout(() => {
+        const end = performance.now();
+        const perfScore = end - start;
+        
+        // Adjust interval based on performance
+        if (perfScore < 50) {
+          setFrameInterval(700); // Fast device
+        } else {
+          setFrameInterval(1000); // Slower device
+        }
+      }, 500);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [webcamOn]);
 
-  useEffect(() => {
-    if (lastMess) {
-      if (lastMess.error) {
-        setNotification(`Lỗi: ${lastMess.error}`);
-      } else if (lastMess.warnings && lastMess.warnings.length > 0) {
-        setWarning(lastMess.warnings);
-        lastMess.warnings.forEach(w => {
-          setNotification(`Cảnh báo: ${w.class_name} (${Math.round(w.confidence * 100)}%)`);
-        });
-      } else {
-        setNotification(`Đã nhận được dữ liệu`);
-      }
+  // Send frames at the appropriate interval
+  useInterval(() => {
+    if (webcamOn && connectionStatus === ConnectionStatus.OPEN && !sending && !cameraError) {
+      sendFrame();
+    }
+  }, webcamOn && connectionStatus === ConnectionStatus.OPEN ? frameInterval : null);
+
+  // Frame sending function with optimized error handling
+  const sendFrame = useCallback(() => {
+    if (!webcamRef.current || connectionStatus !== ConnectionStatus.OPEN || sending) return;
+    
+    try {
+      const imgSrc = webcamRef.current.getScreenshot();
+      if (!imgSrc) return;
+      
+      setSending(true);
+      const payload = {
+        image: imgSrc.split(',')[1],
+        confidence_threshold: 0.7
+      };
+      sendMess(payload);
+    } catch (error) {
+      console.error("Error capturing webcam frame:", error);
+      setCameraError("Error capturing camera frame");
       setSending(false);
     }
-  }, [lastMess, setNotification, setSending, setWarning]); 
-
-  // Hàm gửi frame
-  const sendFrame = useCallback(() => {
-    if (!webcamRef.current) return;
-
-    // Chỉ gửi khi kết nối đang mở
-    if (connectionStatus !== ConnectionStatus.OPEN) {
-        console.warn("Cannot send frame, WebSocket not open. Status:", connectionStatus);
-        // Không nên setSending(false) ở đây vì có thể đang gửi tin nhắn trước đó
-        return;
-    }
-
-    if (sending) {
-      console.log("Skipping sendFrame, already sending.");
-      return;
-    }
-
-    const imgSrc = webcamRef.current.getScreenshot()
-    if (!imgSrc) {
-      console.warn("sendFrame: No image captured.");
-      return;
-    }
-
-    setSending(true)
-
-    const payload = {
-      image: imgSrc.split(',')[1],
-      confidence_threshold: 0.4
-    }
-
-    sendMess(payload)
   }, [sendMess, connectionStatus, setSending, sending]);
-  
-  useInterval(() => {
-    // Kiểm tra cả webcamOn và connectionStatus
-    if (webcamOn && connectionStatus === ConnectionStatus.OPEN) {
-       // Chỉ gửi nếu không đang trong quá trình sending của frame trước đó
-       if (!sending) {  
-           sendFrame();
-       } else {
-          console.log("Skipping sendFrame, previous one still processing.");
-       }
-    }
-  }, webcamOn && connectionStatus === ConnectionStatus.OPEN ? 500 : null);
 
-
-   // Helper để hiển thị trạng thái kết nối
-  const getStatusText = (status) => {
+  // Helper function for connection status text
+  function getStatusText(status) {
     switch (status) {
       case ConnectionStatus.CONNECTING: return "Đang kết nối...";
-      case ConnectionStatus.OPEN: return "Đã kết nối";
-      case ConnectionStatus.CLOSING: return "Đang đóng...";
-      case ConnectionStatus.CLOSED: return "Đã ngắt kết nối";
-      case ConnectionStatus.ERROR: return "Lỗi kết nối";
-      default: return "Không xác định";
+      case ConnectionStatus.OPEN: return "Đã kết nối camera";
+      case ConnectionStatus.CLOSING: return "Đang đóng kết nối...";
+      case ConnectionStatus.CLOSED: return "Đã ngắt kết nối camera";
+      case ConnectionStatus.ERROR: return "Lỗi kết nối camera";
+      default: return "Không xác định trạng thái camera";
     }
-  };
-  // Hàm chuyển camera trước/sau
-  const handleSwitchCamera = () => {
-    setFacingMode((prev) => (prev === "user" ? "environment" : "user"));
-  };
+  }
+
+  // Switch between front/back camera
+  const handleSwitchCamera = useCallback(() => {
+    setFacingMode((prev) => {
+      return prev === "user" ? "environment" : "user";
+    });
+    // Reset camera error when switching cameras
+    setCameraError(null);
+  }, [setFacingMode]);
+
+  // Handle camera errors
+  const handleCameraError = useCallback((error) => {
+    console.error("Camera error:", error);
+    setCameraError("Không thể truy cập camera. Vui lòng kiểm tra quyền truy cập và thiết bị.");
+    setNotification("Lỗi truy cập camera");
+  }, [setNotification]);
+
+  // Handle successful camera start
+  const handleCameraStart = useCallback(() => {
+    setCameraError(null);
+  }, []);
 
   return (
     <WebcamBox>
-      <Button onClick={() => setWebcamOn(w => !w)}>
+      <Button onClick={() => {
+        if (webcamOn) {
+          // Clean up resources when turning camera off
+          setWarnings([]);
+          setNotification("");
+        }
+        setWebcamOn(prev => !prev);
+        setCameraError(null);
+      }}>
         {webcamOn ? "Tắt camera" : "Bật camera"}
       </Button>
+      
       {webcamOn && (
         <Button onClick={handleSwitchCamera} style={{ marginTop: 8 }}>
           Chuyển camera {facingMode === "user" ? "sau" : "trước"}
         </Button>
       )}
-      {/* {sending && <div>Đang gửi ảnh...</div>} */}
+      
+      {cameraError && (
+        <div style={{ color: 'red', margin: '10px 0', padding: '8px', background: '#ffeeee', borderRadius: '4px' }}>
+          {cameraError}
+        </div>
+      )}
+      
       {webcamOn && (
         <Webcam
           ref={webcamRef}
           audio={false}
           screenshotFormat="image/jpeg"
-          width={640}
+          width={1024}
           height={640}
-          videoConstraints={{
-            facingMode: facingMode,
-            // width:640,
-            // height:640
-          }}
-          // mirrored={facingMode === "user"}
+          videoConstraints={videoConstraints}
+          onUserMediaError={handleCameraError}
+          onUserMedia={handleCameraStart}
+          imageSmoothing={true}
         />
       )}
     </WebcamBox>
   );
-}
+};
+
+// Prevent unnecessary re-renders
+export default memo(WebcamCapture);

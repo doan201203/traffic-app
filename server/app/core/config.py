@@ -23,6 +23,8 @@ class Settings(BaseSettings):
         "Hiệu lệnh"
     }
 
+    IMAGE_SIZE: int = 1024
+    
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding='utf-8', extra='ignore')
 
 settings = Settings()

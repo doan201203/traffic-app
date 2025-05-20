@@ -30,7 +30,7 @@ class YOLODetector:
       logger.error(f"Failed to load PyTorch YOLO model from {self.model_path} on device '{self.device}': {e}")
       raise
 
-  def detect(self, image_bytes: bytes, confidence_threshold: float = 0.3) -> list[dict]:
+  def detect(self, image_bytes: bytes, confidence_threshold: float = 0.3, imgsz: int = 610) -> list[dict]:
     try:
       image_pil = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     except Exception as e:
@@ -42,7 +42,7 @@ class YOLODetector:
         source=image_pil,
         conf=confidence_threshold,
         device=self.device,
-        imgsz=640,
+        imgsz=imgsz,
         tracker="bytetrack.yaml"
       )
     except Exception as e:

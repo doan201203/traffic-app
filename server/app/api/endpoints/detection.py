@@ -25,6 +25,7 @@ from starlette.websockets import WebSocketState
 from concurrent.futures import ProcessPoolExecutor
 
 from websockets.exceptions import ConnectionClosed, ConnectionClosedOK, ConnectionClosedError
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -166,7 +167,8 @@ async def websocket_detect_traffic_warning(
                 # Perform detection
                 all_raw_detections = detector.detect(
                     image_bytes=image_bytes, 
-                    confidence_threshold=confidence_threshold
+                    confidence_threshold=confidence_threshold,
+                    imgsz =settings.IMAGE_SIZE,
                 )
                 
                 print("ALL RAW DETECTIONS", all_raw_detections)

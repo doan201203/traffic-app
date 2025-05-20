@@ -10,7 +10,6 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app):
   logger.info('Starting lifespan')
-  print(os.getcwd())
   try:
     detector = YOLODetector(
       model_path=settings.MODEL_PATH,

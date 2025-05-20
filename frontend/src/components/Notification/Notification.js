@@ -1,24 +1,37 @@
-import React, { useEffect, useState } from "react";
+import React, { useState, useEffect } from "react";
 import { NotificationBox } from "./notification.styles";
 
-export default function Notification({ message }) {
-  const [visible, setVisible] = useState(!!message);
+/**
+ * Component hiển thị thông báo tạm thời trên màn hình
+ *
+ * @param {Object} props
+ * @param {string} props.message - Nội dung thông báo
+ * @param {number} props.duration - Thời gian hiển thị (milliseconds)
+ * @param {Function} props.onClose - Callback khi đóng thông báo
+ */
+const Notification = ({ message, duration = 3000, onClose }) => {
+  const [visible, setVisible] = useState(true);
 
   useEffect(() => {
-    if (message) {
-      setVisible(true);
-      const timer = setTimeout(() => setVisible(false), 3000);
-      return () => clearTimeout(timer);
-    } else {
+    const timer = setTimeout(() => {
       setVisible(false);
-    }
-  }, [message]);
+      setTimeout(() => {
+        if (onClose) onClose();
+      }, 300); // Đợi animation kết thúc
+    }, duration);
 
-  if (!message || !visible) return null;
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [duration, onClose]);
+
+  if (!message) return null;
 
   return (
-    <NotificationBox>
+    <NotificationBox style={{ opacity: visible ? 1 : 0 }}>
       {message}
     </NotificationBox>
   );
-}
+};
+
+export default Notification;
