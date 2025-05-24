@@ -81,14 +81,21 @@ export const SpeedPanel = styled.div`
   pointer-events: auto;
   font-size: 0.95rem;
   z-index: 10;
-  gap: 16px;
+  gap: 8px; // Giảm khoảng cách giữa các item
 
   @media (max-width: 600px) {
     top: 4px;
     padding: 6px 4px;
     font-size: 0.85rem;
-    max-width: 99vw;
-    gap: 8px;
+    max-width: 98vw; // Đảm bảo không tràn lề
+    gap: 4px;
+    overflow-x: auto; // Cho phép cuộn ngang nếu cần
+    justify-content: flex-start; // Để các item bắt đầu từ bên trái khi cuộn
+    &::-webkit-scrollbar { // Ẩn thanh cuộn nếu muốn
+      display: none;
+    }
+    -ms-overflow-style: none;  // IE and Edge
+    scrollbar-width: none;  // Firefox
   }
 `;
 

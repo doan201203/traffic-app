@@ -40,15 +40,15 @@ const WebcamCapture = ({
 
   // Process results from backend
   useEffect(() => {
+    console.log(lastMess);
     if (!lastMess) return;
     
     if (lastMess.error) {
       setNotification(`Lỗi: ${lastMess.error}`);
       setWarnings([]);
     } else if (lastMess.warnings && lastMess.warnings.length > 0) {
-      // Sort warnings by confidence for more consistent UI
-      const sortedWarnings = [...lastMess.warnings].sort((a, b) => b.confidence - a.confidence);
-      setWarnings(sortedWarnings);
+      // Use warnings directly without sorting
+      setWarnings(lastMess.warnings);
     } else {
       setNotification(`Không phát hiện cảnh báo giao thông.`);
       setWarnings([]);
@@ -58,7 +58,7 @@ const WebcamCapture = ({
 
   // Throttled frame sending with dynamic interval based on device performance
   // More powerful devices will use 700ms, slower ones 1000ms
-  const [frameInterval, setFrameInterval] = useState(1000);
+  const [frameInterval, setFrameInterval] = useState(500);
   
   useEffect(() => {
     // Measure device performance to set appropriate frame rate
@@ -72,9 +72,9 @@ const WebcamCapture = ({
         
         // Adjust interval based on performance
         if (perfScore < 50) {
-          setFrameInterval(700); // Fast device
+          setFrameInterval(500); // Fast device
         } else {
-          setFrameInterval(1000); // Slower device
+          setFrameInterval(700); // Slower device
         }
       }, 500);
       
@@ -100,7 +100,9 @@ const WebcamCapture = ({
       setSending(true);
       const payload = {
         image: imgSrc.split(',')[1],
-        confidence_threshold: 0.7
+        confidence_threshold: 0.6,
+        window_size: [240, 240],
+        nms_threshold: 0.3,
       };
       sendMess(payload);
     } catch (error) {
@@ -174,12 +176,13 @@ const WebcamCapture = ({
           ref={webcamRef}
           audio={false}
           screenshotFormat="image/jpeg"
-          width={1024}
+          width={640}
           height={640}
           videoConstraints={videoConstraints}
           onUserMediaError={handleCameraError}
           onUserMedia={handleCameraStart}
           imageSmoothing={true}
+          screenshotQuality={1}
         />
       )}
     </WebcamBox>

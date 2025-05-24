@@ -43,7 +43,6 @@ class YOLODetector:
         conf=confidence_threshold,
         device=self.device,
         imgsz=imgsz,
-        tracker="bytetrack.yaml"
       )
     except Exception as e:
       logger.error(f"Detector: PyTorch YOLO model inference error: {e}", exc_info=True)

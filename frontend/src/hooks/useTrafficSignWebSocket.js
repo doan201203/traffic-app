@@ -10,8 +10,10 @@ const getWebsocketUrl = () => {
   if (wsHost === 'localhost') {
     // Use port 8000 for API server
     return `ws://localhost:8000/api/v1/ws/detect`;
+    // return `ws://41f2-35-197-125-120.ngrok-free.app/api/v1/ws/detect`;
   } else {
     // For production or other environments
+    return `wss://0477-34-125-123-255.ngrok-free.app/api/v1/ws/detect`;
     return `${protocol}//${window.location.host}/api/v1/ws/detect`;
   }
 };
@@ -147,7 +149,7 @@ export function useTrafficSignWebSocket(enabled = false) {
         // Create new connection with dynamic URL
         const wsUrl = getWebsocketUrl();
         const ws = new WebSocket(wsUrl);
-        
+        console.log("Connecting to WebSocket:", wsUrl);
         websocket.current = ws;
         setConnectionStatus(ConnectionStatus.CONNECTING);
         

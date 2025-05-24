@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
 
     # Đường dẫn tới model .pt
-    MODEL_PATH: Path =  'models_onnx/best.onnx'
+    MODEL_PATH: Path =  'models_onnx/best.pt'
     DEVICE: str = "cpu" # "cpu", "cuda", "cuda:0", "mps", etc.
 
     DEFAULT_CONFIDENCE_THRESHOLD: float = 0.25

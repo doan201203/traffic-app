@@ -65,7 +65,10 @@ function NavigationOverlay({ coords, warnings, webcamOn, facingMode }) {
             item.class_name === warning.class_name && 
             item.confidence <= warning.confidence
           );
-          
+          const isDuplicate = updatedQueue.some(item =>
+            item.class_name === warning.class_name 
+          );
+
           // If warning exists, just update its expiration time
           if (existingIdx !== -1) {
             updatedQueue[existingIdx] = {
@@ -73,9 +76,9 @@ function NavigationOverlay({ coords, warnings, webcamOn, facingMode }) {
               image: warning.image,
               expireTime: now + extraTime // Reset to 10 seconds from now
             };
-          } 
+          }
           // Otherwise add new warning with timer
-          else {
+          else if (!isDuplicate) {
             updatedQueue.push({
               ...warning,
               expireTime: now + extraTime

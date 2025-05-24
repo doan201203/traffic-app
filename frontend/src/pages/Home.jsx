@@ -75,7 +75,15 @@ export default function Home() {
 
   // Render loading state
   if (geoLoading && !coords) {
-    return <div style={{ maxWidth: 800, margin: "40px auto", padding: 24, background: "#f8fafd", borderRadius: 24, boxShadow: "0 4px 32px #0001" }}>
+    <div style={{
+      maxWidth: 800, 
+      width: '100%',
+      margin: "20px auto", 
+      padding: "16px",
+      background: "#f8fafd",
+      borderRadius: "24px", // Có thể giảm trên mobile
+      boxShadow: "0 4px 32px #0001"
+    }}>
       <h2 style={{ textAlign: "center", color: "#003a53", marginBottom: 32 }}>Ứng dụng cảnh báo giao thông</h2>
       <div style={{ textAlign: "center", padding: 24 }}>Đang tải dữ liệu vị trí...</div>
     </div>;

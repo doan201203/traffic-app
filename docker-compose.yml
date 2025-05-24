@@ -43,15 +43,14 @@ services:
     networks:
       - traffic-network
 
-  cloudflared:
-    image: cloudflare/cloudflared:latest
-    container_name: cloudflared
-    restart: unless-stopped
-    command: tunnel --no-autoupdate run --token eyJhIjoiMTQwZTVlNWZhZjc3Njk2ZWJjMGY5N2FlZjUyMWNkMjciLCJ0IjoiY2ZhYjMwYjgtNTIzMi00ZWY4LThhODktMWZiNzZlNjMwNGRkIiwicyI6IlpXWTRNek5sTURJdE16WTRZaTAwTkRFeUxUbGxPVFl0WW1Rek5qVmtNVGM0TURSaSJ9
-    depends_on:
-      - nginx
-    networks:
-      - traffic-network
+  # cloudflared:
+  #   image: cloudflare/cloudflared:latest
+  #   container_name: cloudflared
+  #   command: tunnel --no-autoupdate run --token eyJhIjoiMTQwZTVlNWZhZjc3Njk2ZWJjMGY5N2FlZjUyMWNkMjciLCJ0IjoiY2ZhYjMwYjgtNTIzMi00ZWY4LThhODktMWZiNzZlNjMwNGRkIiwicyI6IlpXWTRNek5sTURJdE16WTRZaTAwTkRFeUxUbGxPVFl0WW1Rek5qVmtNVGM0TURSaSJ9
+  #   depends_on:
+  #     - nginx
+  #   networks:
+  #     - traffic-network
 
 networks:
   traffic-network:
