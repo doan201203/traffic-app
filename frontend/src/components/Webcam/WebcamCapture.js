@@ -101,7 +101,7 @@ const WebcamCapture = ({
       const payload = {
         image: imgSrc.split(',')[1],
         confidence_threshold: 0.6,
-        window_size: [240, 240],
+        window_size: [160, 160],
         nms_threshold: 0.3,
       };
       sendMess(payload);

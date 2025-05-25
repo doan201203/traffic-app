@@ -9,11 +9,11 @@ const getWebsocketUrl = () => {
   // Special handling for localhost to ensure correct port
   if (wsHost === 'localhost') {
     // Use port 8000 for API server
-    // return `ws://c0b4-35-247-142-232.ngrok-free.app/api/v1/ws/detect`;
-    return `ws://localhost:8000/api/v1/ws/detect`;
+    return `ws://ec7c-34-118-243-109.ngrok-free.app/api/v1/ws/detect`;
+    // return `ws://localhost:8000/api/v1/ws/detect`;
   } else {
     // For production or other environments
-    // return `wss://ba0d-34-125-134-25.ngrok-free.app/api/v1/ws/detect`;
+    return `wss://ec7c-34-118-243-109.ngrok-free.app/api/v1/ws/detect`;
     //subdomain = 'wss'
     return `${protocol}//${wsHost}/api/v1/ws/detect`;
   }
@@ -155,6 +155,7 @@ export function useTrafficSignWebSocket(enabled = false) {
         setConnectionStatus(ConnectionStatus.CONNECTING);
         
         ws.onopen = () => {
+          console.log("connected")
           setConnectionStatus(ConnectionStatus.OPEN);
           retryCount.current = 0;
           setupHeartbeat();
