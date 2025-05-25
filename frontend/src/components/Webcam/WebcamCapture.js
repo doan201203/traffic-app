@@ -58,29 +58,29 @@ const WebcamCapture = ({
 
   // Throttled frame sending with dynamic interval based on device performance
   // More powerful devices will use 700ms, slower ones 1000ms
-  const [frameInterval, setFrameInterval] = useState(500);
+  const [frameInterval, setFrameInterval] = useState(250);
   
-  useEffect(() => {
-    // Measure device performance to set appropriate frame rate
-    if (webcamOn) {
-      const start = performance.now();
-      let counter = 0;
+  // useEffect(() => {
+  //   // Measure device performance to set appropriate frame rate
+  //   if (webcamOn) {
+  //     const start = performance.now();
+  //     let counter = 0;
       
-      const timer = setTimeout(() => {
-        const end = performance.now();
-        const perfScore = end - start;
+  //     const timer = setTimeout(() => {
+  //       const end = performance.now();
+  //       const perfScore = end - start;
         
-        // Adjust interval based on performance
-        if (perfScore < 50) {
-          setFrameInterval(500); // Fast device
-        } else {
-          setFrameInterval(700); // Slower device
-        }
-      }, 500);
+  //       // Adjust interval based on performance
+  //       if (perfScore < 50) {
+  //         setFrameInterval(200); // Fast device
+  //       } else {
+  //         setFrameInterval(300); // Slower device
+  //       }
+  //     }, 200);
       
-      return () => clearTimeout(timer);
-    }
-  }, [webcamOn]);
+  //     return () => clearTimeout(timer);
+  //   }
+  // }, [webcamOn]);
 
   // Send frames at the appropriate interval
   useInterval(() => {
