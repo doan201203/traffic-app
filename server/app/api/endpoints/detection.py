@@ -26,13 +26,6 @@ from concurrent.futures import ProcessPoolExecutor
 
 from websockets.exceptions import ConnectionClosed, ConnectionClosedOK, ConnectionClosedError
 from app.core.config import settings
-from app.services.image_tiling_utils import (
-  tile_image, 
-  combine_tile_detections, 
-  tile_to_bytes,
-  visualize_tiling,
-  crop_image
-)
 from app.services.sliding_window_utils import (
   sliding_window_inference,
   combine_sliding_window_detections,
@@ -92,10 +85,6 @@ async def detect_traffic_warning(
   visualize: bool = Query(
     default=False,
     description="Whether to return visualization with sliding window grid"
-  ),
-  method: str = Query(
-    default="sliding_window",
-    description="Detection method: 'sliding_window', 'tiling', or 'both'"
   ),
   crop_left: float = Query(
     default=0.25,
@@ -181,104 +170,54 @@ async def detect_traffic_warning(
     
     conf_thresh = confidence_threshold if confidence_threshold is not None else settings.DEFAULT_CONFIDENCE_THRESHOLD
     
-    all_raw_detections = []
+    logger.info(f"Using sliding window detection with stride {stride}")
     
-    if method == "sliding_window" or method == "both":
-      logger.info(f"Using sliding window detection with stride {stride}")
-      
-      # Create visualization if requested
-      if visualize:
-        visualize_sliding_windows(
-          image_bytes=cropped_image_bytes,
-          window_size=w_size,
-          stride=stride,
-          output_path="sliding_window_visualization.jpg"
-        )
-        
-        # Get and log statistics
-        stats = get_sliding_window_stats(cropped_image_bytes, w_size, stride)
-        logger.info(f"Sliding window stats: {stats}")
-      
-      # Apply sliding window inference
-      windows, original_size, window_coordinates = sliding_window_inference(
+    # Create visualization if requested
+    if visualize:
+      visualize_sliding_windows(
         image_bytes=cropped_image_bytes,
         window_size=w_size,
-        stride=stride
+        stride=stride,
+        output_path="sliding_window_visualization.jpg"
       )
       
-      # Process each window
-      all_window_detections = []
-      for i, window in enumerate(windows):
-        # Convert window to bytes for detector
-        window_bytes = window_to_bytes(window)
-        # Detect objects in the window
-        window_detections = detector.detect(
-          image_bytes=window_bytes, 
-          confidence_threshold=conf_thresh,
-          imgsz=w_size
-        )
-        all_window_detections.append(window_detections)
-        
-        if window_detections:
-          logger.debug(f"Window {i+1}: Found {len(window_detections)} detections")
-      
-      # Combine detections from all windows with class-agnostic NMS
-      sliding_detections = combine_sliding_window_detections(
-        window_detections=all_window_detections,
-        window_coordinates=window_coordinates,
-        original_size=original_size,
-        iou_threshold=nms_threshold
-      )
-      
-      all_raw_detections.extend(sliding_detections)
-      logger.info(f"Sliding window: {len(sliding_detections)} detections after class-agnostic NMS")
+      # Get and log statistics
+      stats = get_sliding_window_stats(cropped_image_bytes, w_size, stride)
+      logger.info(f"Sliding window stats: {stats}")
     
-    if method == "tiling" or method == "both":
-      logger.info(f"Using tiling detection with tile size {w_size}")
-      
-      # Create tiling visualization if requested and not already done
-      if visualize and method != "both":
-        visualize_tiling(
-          image_bytes=cropped_image_bytes,
-          tile_size=w_size,
-          output_path="tiling_visualization.jpg"
-        )
-      
-      # Split image into tiles
-      tiles, original_size, tile_coordinates = tile_image(
-        image_bytes=cropped_image_bytes,
-        tile_size=w_size
-      )
-      
-      # Process each tile
-      all_tile_detections = []
-      for tile in tiles:
-        # Convert tile to bytes for detector
-        tile_bytes = tile_to_bytes(tile)
-        # Detect objects in the tile
-        tile_detections = detector.detect(
-          image_bytes=tile_bytes, 
-          confidence_threshold=conf_thresh,
-          imgsz=(tile.shape[1], tile.shape[0])
-        )
-        all_tile_detections.append(tile_detections)
-      
-      # Combine detections from all tiles
-      tiling_detections = combine_tile_detections(
-        tile_detections=all_tile_detections,
-        tile_coordinates=tile_coordinates,
-        original_size=original_size,
-        iou_threshold=nms_threshold
-      )
-      
-      all_raw_detections.extend(tiling_detections)
-      logger.info(f"Tiling: {len(tiling_detections)} detections after NMS")
+    # Apply sliding window inference
+    windows, original_size, window_coordinates = sliding_window_inference(
+      image_bytes=cropped_image_bytes,
+      window_size=w_size,
+      stride=stride,
+      resize_for_detection=(640, 640)  # Resize all windows to 640x640 before detection
+    )
     
-    # If using both methods, apply final class-agnostic NMS to combined results
-    if method == "both":
-      logger.info("Applying final class-agnostic NMS to combined sliding window + tiling results")
-      all_raw_detections = class_agnostic_nms(all_raw_detections, nms_threshold)
-      logger.info(f"Combined methods: {len(all_raw_detections)} final detections after class-agnostic NMS")
+    # Process each window
+    all_window_detections = []
+    for i, window in enumerate(windows):
+      # Convert window to bytes for detector
+      window_bytes = window_to_bytes(window)
+      # Detect objects in the window (window is already resized to 640x640)
+      window_detections = detector.detect(
+        image_bytes=window_bytes, 
+        confidence_threshold=conf_thresh,
+        imgsz=(640, 640)  # Use 640x640 since windows are resized
+      )
+      all_window_detections.append(window_detections)
+      
+      if window_detections:
+        logger.debug(f"Window {i+1}: Found {len(window_detections)} detections")
+    
+    # Combine detections from all windows with class-agnostic NMS
+    all_raw_detections = combine_sliding_window_detections(
+      window_detections=all_window_detections,
+      window_coordinates=window_coordinates,
+      original_size=original_size,
+      iou_threshold=nms_threshold
+    )
+    
+    logger.info(f"Sliding window: {len(all_raw_detections)} detections after class-agnostic NMS")
     
   except ValueError as e:
     logger.error(f"API: Error during detection: {e}")
@@ -346,11 +285,10 @@ async def websocket_detect_traffic_warning(
                 request_data = json.loads(data)
                 image_base64 = request_data.get('image')
                 confidence_threshold = request_data.get('confidence_threshold', 0.5)
-                window_size = request_data.get('window_size', (160, 160))
-                stride = request_data.get('stride', 80)
+                window_size = request_data.get('window_size', (240, 240))
+                stride = request_data.get('stride', 160)
                 nms_threshold = request_data.get('nms_threshold', 0.3)
                 visualize = request_data.get('visualize', True)
-                method = request_data.get('method', 'sliding_window')
                 crop_left = request_data.get('crop_left', 0.25)
                 crop_bottom = request_data.get('crop_bottom', 0.25)
                 resize_to_square = request_data.get('resize_to_square', True)
@@ -404,87 +342,45 @@ async def websocket_detect_traffic_warning(
                 
                 all_raw_detections = []
                 
-                if method == "sliding_window" or method == "both":
-                  # Create visualization if requested
-                  if visualize:
-                    visualize_sliding_windows(
-                      image_bytes=cropped_image_bytes,
-                      window_size=window_size,
-                      stride=stride,
-                      output_path="sliding_window_visualization_ws.jpg"
-                    )
-                  
-                  # Apply sliding window inference
-                  windows, original_size, window_coordinates = sliding_window_inference(
+                # Create visualization if requested
+                if visualize:
+                  visualize_sliding_windows(
                     image_bytes=cropped_image_bytes,
                     window_size=window_size,
-                    stride=stride
+                    stride=stride,
+                    output_path="sliding_window_visualization_ws.jpg"
                   )
-                  
-                  # Process each window
-                  all_window_detections = []
-                  for window in windows:
-                    # Convert window to bytes for detector
-                    window_bytes = window_to_bytes(window)
-                    # Detect objects in the window
-                    window_detections = detector.detect(
-                        image_bytes=window_bytes, 
-                        confidence_threshold=confidence_threshold,
-                        imgsz=window_size,
-                    )
-                    all_window_detections.append(window_detections)
-                  
-                  # Combine detections from all windows with class-agnostic NMS
-                  sliding_detections = combine_sliding_window_detections(
-                    window_detections=all_window_detections,
-                    window_coordinates=window_coordinates,
-                    original_size=original_size,
-                    iou_threshold=nms_threshold
-                  )
-                  
-                  all_raw_detections.extend(sliding_detections)
                 
-                if method == "tiling" or method == "both":
-                  # Create tiling visualization if requested
-                  if visualize and method != "both":
-                    visualize_tiling(
-                      image_bytes=cropped_image_bytes,
-                      tile_size=window_size,
-                      output_path="tiling_visualization_ws.jpg"
-                    )
-                  
-                  # Split image into tiles
-                  tiles, original_size, tile_coordinates = tile_image(
-                    image_bytes=cropped_image_bytes,
-                    tile_size=window_size
-                  )
-                  
-                  # Process each tile
-                  all_tile_detections = []
-                  for tile in tiles:
-                    # Convert tile to bytes for detector
-                    tile_bytes = tile_to_bytes(tile)
-                    # Detect objects in the tile
-                    tile_detections = detector.detect(
-                        image_bytes=tile_bytes, 
-                        confidence_threshold=confidence_threshold,
-                        imgsz=(tile.shape[1], tile.shape[0]),
-                    )
-                    all_tile_detections.append(tile_detections)
-                  
-                  # Combine detections from all tiles
-                  tiling_detections = combine_tile_detections(
-                    tile_detections=all_tile_detections,
-                    tile_coordinates=tile_coordinates,
-                    original_size=original_size,
-                    iou_threshold=nms_threshold
-                  )
-                  
-                  all_raw_detections.extend(tiling_detections)
+                # Apply sliding window inference
+                windows, original_size, window_coordinates = sliding_window_inference(
+                  image_bytes=cropped_image_bytes,
+                  window_size=window_size,
+                  stride=stride,
+                  resize_for_detection=settings.REISZE_FOR_DETECTION  
+                )
                 
-                # If using both methods, apply final class-agnostic NMS
-                if method == "both":
-                  all_raw_detections = class_agnostic_nms(all_raw_detections, nms_threshold)
+                # Process each window
+                all_window_detections = []
+                for window in windows:
+                  # Convert window to bytes for detector
+                  window_bytes = window_to_bytes(window)
+                  # Detect objects in the window (window is already resized to 640x640)
+                  window_detections = detector.detect(
+                      image_bytes=window_bytes, 
+                      confidence_threshold=confidence_threshold,
+                      imgsz=settings.REISZE_FOR_DETECTION 
+                  )
+                  all_window_detections.append(window_detections)
+                
+                # Combine detections from all windows with class-agnostic NMS
+                sliding_detections = combine_sliding_window_detections(
+                  window_detections=all_window_detections,
+                  window_coordinates=window_coordinates,
+                  original_size=original_size,
+                  iou_threshold=nms_threshold
+                )
+                
+                all_raw_detections.extend(sliding_detections)
                 
                 print("all_raw_detections", all_raw_detections)
                 relevant_warnings: list[DetectionResult] = []

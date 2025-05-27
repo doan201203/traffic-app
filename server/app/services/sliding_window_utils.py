@@ -8,7 +8,8 @@ def sliding_window_inference(
     window_size: Tuple[int, int] = (160, 160),
     stride: int = 80,
     detector_func: callable = None,
-    confidence_threshold: float = 0.3
+    confidence_threshold: float = 0.3,
+    resize_for_detection: Tuple[int, int] = (480, 480)
 ) -> Tuple[List[np.ndarray], Tuple[int, int], List[Tuple[int, int]]]:
     """
     Apply sliding window approach to an image for object detection.
@@ -19,10 +20,11 @@ def sliding_window_inference(
         stride: Step size for sliding window (pixels)
         detector_func: Function to call for detection on each window
         confidence_threshold: Minimum confidence for detections
+        resize_for_detection: Target size to resize windows before detection (width, height)
     
     Returns:
         Tuple of:
-            - List of numpy arrays representing image windows
+            - List of numpy arrays representing image windows (resized to resize_for_detection size)
             - Original image size (width, height)
             - List of top-left corner coordinates for each window
     """
@@ -65,10 +67,15 @@ def sliding_window_inference(
                 padded_window[:window.shape[0], :window.shape[1], :] = window
                 window = padded_window
             
+            # Resize window to target detection size (640x640)
+            if resize_for_detection and resize_for_detection != window_size:
+                window = cv2.resize(window, resize_for_detection, interpolation=cv2.INTER_LINEAR)
+                print(f"Resized window from {window_size} to {resize_for_detection} for detection")
+            
             windows.append(window)
             coordinates.append((x_start, y_start))
     
-    print(f"Generated {len(windows)} sliding windows with stride {stride}")
+    print(f"Generated {len(windows)} sliding windows with stride {stride}, resized to {resize_for_detection}")
     return windows, original_size, coordinates
 
 def combine_sliding_window_detections(
