@@ -9,11 +9,11 @@ const getWebsocketUrl = () => {
   // Special handling for localhost to ensure correct port
   if (wsHost === 'localhost') {
     // Use port 8000 for API server
-    return `ws://677d-34-143-155-6.ngrok-free.app/api/v1/ws/detect`;
+    return `ws://c94e-34-16-207-191.ngrok-free.app/api/v1/ws/detect`;
     return `ws://localhost:8000/api/v1/ws/detect`;
   } else {
     // For production or other environments
-    return `wss://677d-34-143-155-6.ngrok-free.app/api/v1/ws/detect`;
+    return `wss://c94e-34-16-207-191.ngrok-free.app/api/v1/ws/detect`;
     //subdomain = 'wss'
     return `${protocol}//${wsHost}/api/v1/ws/detect`;
   }
