@@ -26,7 +26,7 @@
 ### Backend (FastAPI)
 
 * **FastAPI:** Một framework web hiện đại, nhanh (hiệu suất cao) để xây dựng API với Python 3.7+ dựa trên các gợi ý kiểu Python tiêu chuẩn.
-* **Ultralytics YOLO:** Để phát hiện đối tượng tiên tiến bằng cách sử dụng các mô hình YOLO. Đường dẫn mô hình được cấu hình là `models_onnx/min.pt`.
+* **Ultralytics YOLO:** Để phát hiện đối tượng tiên tiến bằng cách sử dụng các mô hình YOLO. Đường dẫn mô hình được cấu hình là `models_onnx/best.pt`.
 * **OpenCV (`cv2`):** Được sử dụng cho các tác vụ xử lý hình ảnh, bao gồm cắt và thao tác khung hình ảnh.
 * **NumPy:** Để thực hiện các phép toán số học trên dữ liệu hình ảnh.
 * **Pillow (`PIL`):** Để thao tác hình ảnh.
