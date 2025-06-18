@@ -43,7 +43,6 @@
 
 ## Cấu trúc dự án
 
-.
 ├── .gitignore
 ├── docker-compose.yml
 ├── frontend/
