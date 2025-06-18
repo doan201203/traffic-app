@@ -41,65 +41,6 @@
 * **Docker & Docker Compose:** Để đóng gói các dịch vụ frontend và backend vào container, đơn giản hóa việc triển khai và phát triển.
 * **Nginx (Tùy chọn):** Một cấu hình Nginx mẫu được cung cấp cho việc thiết lập reverse proxy tiềm năng, xử lý các file tĩnh, định tuyến API và proxy kết nối WebSocket, bao gồm hỗ trợ các tiêu đề Cloudflare (hiện đang được comment trong `docker-compose.yml`).
 
-## Cấu trúc dự án
-
-├── .gitignore
-├── docker-compose.yml
-├── frontend/
-│   ├── public/
-│   │   └── index.html
-│   ├── src/
-│   │   ├── App.js
-│   │   ├── components/
-│   │   │   ├── Notification/
-│   │   │   │   ├── Notification.js
-│   │   │   │   └── notification.styles.js
-│   │   │   └── Webcam/
-│   │   │       ├── MiniWebcam.js
-│   │   │       └── MiniWebcam.styles.js
-│   │   │       └── WebcamCapture.js
-│   │   │       └── webcamCapture.styles.js
-│   │   ├── hooks/
-│   │   │   ├── useGeocode.js
-│   │   │   ├── useGeolocation.js
-│   │   │   ├── useGeolocationPermission.js
-│   │   │   ├── useInterval.js
-│   │   │   └── useTrafficSignWebSocket.js
-│   │   ├── pages/
-│   │   │   └── Home.jsx
-│   │   └── services/
-│   │       ├── trafficSignApi.js
-│   │       └── trafficSignWs.js
-│   │   ├── index.js
-│   │   ├── package.json
-│   │   └── package-lock.json
-├── nginx/
-│   └── nginx.conf
-└── server/
-├── app/
-│   ├── api/
-│   │   ├── init.py
-│   │   └── endpoints/
-│   │       └── detection.py
-│   ├── core/
-│   │   └── config.py
-│   ├── models/
-│   │   └── traffic_warning_models.py
-│   ├── services/
-│   │   ├── image_cropping_utils.py
-│   │   ├── image_tiling_utils.py
-│   │   ├── sliding_window_utils.py
-│   │   ├── test_image_cropping.py
-│   │   └── test_sliding_window.py
-│   ├── lifespan.py
-│   └── main.py
-├── core_models/
-│   └── yolo_detector.py
-├── models_onnx/
-│   └── class_name.txt
-└── requirements.txt
-
-
 ## Bắt đầu
 
 Các hướng dẫn này sẽ giúp bạn thiết lập và chạy một bản sao của dự án trên máy cục bộ của bạn cho mục đích phát triển và thử nghiệm.
@@ -121,15 +62,13 @@ Các hướng dẫn này sẽ giúp bạn thiết lập và chạy một bản s
     Tạo file `.env` trong thư mục `server/` và cấu hình cài đặt của bạn.
     ```
     # server/.env ví dụ
-    MODEL_PATH=models_onnx/min.pt
+    MODEL_PATH=models_onnx/best.pt
     DEVICE=cpu # hoặc "cuda" nếu bạn có GPU tương thích
-    CORS_ORIGINS=http://localhost,[https://trdoan20.tech](https://trdoan20.tech),[https://www.trdoan20.tech](https://www.trdoan20.tech),[https://api.trdoan20.tech](https://api.trdoan20.tech)
     ```
     Tạo file `.env` trong thư mục `frontend/` cho các biến môi trường dành riêng cho frontend:
     ```
-    # frontend/.env ví dụ
-    REACT_APP_MAPBOX_ACCESS_TOKEN=YOUR_MAPBOX_ACCESS_TOKEN
-    REACT_APP_WS_HOST=localhost # Đối với phát triển cục bộ, hoặc tên miền của bạn cho sản xuất
+    # frontend/.env
+    REACT_APP_MAPBOX_ACCESS_TOKEN=pk.eyJ1IjoiZG9hbjIwMTIwMyIsImEiOiJjbWFiYTJudXQxNDJpMmpwdnV4NmluN285In0.LwElgr-059U7IL2Mf-sToA
     ```
     Thay thế `YOUR_MAPBOX_ACCESS_TOKEN` bằng Mapbox Public Access Token thực tế của bạn. Bạn có thể lấy một cái từ [trang web Mapbox](https://docs.mapbox.com/help/getting-started/access-tokens/).
 
